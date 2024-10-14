@@ -23,7 +23,7 @@ jobs:
           --health-timeout 5s
           --health-retries 5
         ports:
-          - 5432:5432
+          - 5434:5432 
 
     steps:
     - uses: actions/checkout@v3
@@ -41,7 +41,14 @@ jobs:
         migrate -version
 
     - name: Set environment variables for database
-      run: echo "DB_SOURCE=postgresql://root:secret@localhost:5432/simple_bank?sslmode=disable" >> $GITHUB_ENV
+      run: echo "DB_SOURCE=postgresql://root:secret@localhost:5434/simple_bank?sslmode=disable" >> $GITHUB_ENV
+
+    - name: Wait for Postgres to be ready
+      run: |
+        until pg_isready -h localhost -p 5434; do
+          echo "Waiting for Postgres...";
+          sleep 5;
+        done
 
     - name: Run migrations
       run: make migrateup
