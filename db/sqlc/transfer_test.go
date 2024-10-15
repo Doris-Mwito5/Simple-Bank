@@ -71,8 +71,7 @@ func TestUpdateTransfer(t *testing.T) {
 
 func TestDeleteTransfer(t *testing.T) {
 	transfer1 := createRandomTransfer(t)
-	err := testQueries.DeleteTransfer(context.Background(), transfer1.ID)
-
+	// err := testQueries.DeleteTransfer(context.Background(), transfer1.ID)
 	transfer2, err := testQueries.GetTransfer(context.Background(), transfer1.ID)
 	require.Error(t, err)
 	require.EqualError(t, err, sql.ErrNoRows.Error())

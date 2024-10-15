@@ -57,37 +57,58 @@ type TransferTxResult struct {
 	ToEntry      Entry        `json:"to_entry"`
 }
 
-var txKey = struct{}{}
+type txKeyType string
+
+var txKey = txKeyType("txKey")
+
 
 //function to perform money transfer transacton
 func (store *Store) TransferTx(ctx context.Context, arg TransferTxParams) (TransferTxResult, error) {
-	//create an empty result
 	var result TransferTxResult
-	// call the store store.ExecTx function to create and run the database transaction
+
+	// Set transaction name in the context (optional)
+	ctx = context.WithValue(ctx, txKey, "transaction-1")
+
+	// Convert TransferTxParams (arg) to CreateTransferParams
+	createTransferParams := CreateTransferParams{
+		FromAccountID: arg.FromAccountID,
+		ToAccountID:   arg.ToAccountID,
+		Amount:        arg.Amount,
+	}
+
+	// Pass the converted params to the CreateTransfer function
 	err := store.execTx(ctx, func(q *Queries) error {
 		var err error
-		
-		result.Transfer, err = q.CreateTransfer(ctx, CreateTransferParams{
-			FromAccountID: arg.FromAccountID,
-			ToAccountID:   arg.ToAccountID,
-			Amount:        arg.Amount,
-		})
+
+		// Use the transaction name for logging/debugging (optional)
+		if txName, ok := ctx.Value(txKey).(string); ok {
+			fmt.Printf("Running %s\n", txName)
+		}
+
+		// Step 1: Create the transfer
+		result.Transfer, err = q.CreateTransfer(ctx, createTransferParams)
+		if err != nil {
+			return fmt.Errorf("could not create transfer: %v", err)
+		}
+
+		// Step 2: Update the accounts' balances
 		if arg.FromAccountID > arg.ToAccountID {
 			result.FromAccount, result.ToAccount, err = addMoney(ctx, q, arg.FromAccountID, -arg.Amount, arg.ToAccountID, arg.Amount)
 		} else {
 			result.FromAccount, result.ToAccount, err = addMoney(ctx, q, arg.ToAccountID, arg.Amount, arg.FromAccountID, -arg.Amount)
 		}
 
-		// Check if there was an error during addMoney.
 		if err != nil {
-			return err
+			return fmt.Errorf("could not update account balances: %v", err)
 		}
 
 		return nil
 	})
 
+	// Return the result and any error
 	return result, err
 }
+
 
 func addMoney(
 	ctx context.Context,
