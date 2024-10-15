@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"log"
 )
 
 type Store struct {
@@ -62,51 +63,54 @@ type txKeyType string
 var txKey = txKeyType("txKey")
 
 
-//function to perform money transfer transacton
 func (store *Store) TransferTx(ctx context.Context, arg TransferTxParams) (TransferTxResult, error) {
-	var result TransferTxResult
+    var result TransferTxResult
 
-	// Set transaction name in the context (optional)
-	ctx = context.WithValue(ctx, txKey, "transaction-1")
+    // Start the transaction
+    err := store.execTx(ctx, func(q *Queries) error {
+        var err error
 
-	// Convert TransferTxParams (arg) to CreateTransferParams
-	createTransferParams := CreateTransferParams{
-		FromAccountID: arg.FromAccountID,
-		ToAccountID:   arg.ToAccountID,
-		Amount:        arg.Amount,
-	}
+        // Type conversion from TransferTxParams to CreateTransferParams
+        result.Transfer, err = q.CreateTransfer(ctx, CreateTransferParams(arg))
+        if err != nil {
+            return fmt.Errorf("TransferTx - failed to create transfer: %w", err)
+        }
 
-	// Pass the converted params to the CreateTransfer function
-	err := store.execTx(ctx, func(q *Queries) error {
-		var err error
+        // Create entries for the FromAccount and ToAccount
+        result.FromEntry, err = q.CreateEntry(ctx, CreateEntryParams{
+            AccountID: arg.FromAccountID,
+            Amount:    -arg.Amount,
+        })
+        if err != nil {
+            return fmt.Errorf("TransferTx - failed to create from entry: %w", err)
+        }
 
-		// Use the transaction name for logging/debugging (optional)
-		if txName, ok := ctx.Value(txKey).(string); ok {
-			fmt.Printf("Running %s\n", txName)
-		}
+        log.Printf("Created FromEntry: %+v", result.FromEntry)
 
-		// Step 1: Create the transfer
-		result.Transfer, err = q.CreateTransfer(ctx, createTransferParams)
-		if err != nil {
-			return fmt.Errorf("could not create transfer: %v", err)
-		}
+        result.ToEntry, err = q.CreateEntry(ctx, CreateEntryParams{
+            AccountID: arg.ToAccountID,
+            Amount:    arg.Amount,
+        })
+        if err != nil {
+            return fmt.Errorf("TransferTx - failed to create to entry: %w", err)
+        }
 
-		// Step 2: Update the accounts' balances
-		if arg.FromAccountID > arg.ToAccountID {
-			result.FromAccount, result.ToAccount, err = addMoney(ctx, q, arg.FromAccountID, -arg.Amount, arg.ToAccountID, arg.Amount)
-		} else {
-			result.FromAccount, result.ToAccount, err = addMoney(ctx, q, arg.ToAccountID, arg.Amount, arg.FromAccountID, -arg.Amount)
-		}
+        log.Printf("Created ToEntry: %+v", result.ToEntry)
 
-		if err != nil {
-			return fmt.Errorf("could not update account balances: %v", err)
-		}
+        // Update the account balances
+        result.FromAccount, result.ToAccount, err = addMoney(ctx, q, arg.FromAccountID, -arg.Amount, arg.ToAccountID, arg.Amount)
+        if err != nil {
+            return fmt.Errorf("TransferTx - failed to update account balances: %w", err)
+        }
 
-		return nil
-	})
+        return nil
+    })
 
-	// Return the result and any error
-	return result, err
+    if err != nil {
+        return result, err
+    }
+
+    return result, nil
 }
 
 
