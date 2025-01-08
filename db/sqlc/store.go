@@ -7,22 +7,28 @@ import (
 	"log"
 )
 
-type Store struct {
+type Store interface {
+    TransferTx(ctx context.Context, arg TransferTxParams) (TransferTxResult, error)
+    Querier
+
+}
+
+type sqlStore struct {
 	//a query only performs a single operation in a table thus needs to extend the struct functionality in golang via composition
 	*Queries
 	//creating a new transaction
 	db *sql.DB
 }
 
-func NewStore(db *sql.DB) *Store {
-	return &Store{
+func NewStore(db *sql.DB) *sqlStore {
+	return &sqlStore{
 		db: db,
 		Queries: New(db),
 	}
 }
 
 //function to execite a geeneric database transaction
-func (store *Store) execTx(ctx context.Context, fn func(*Queries) error) error{
+func (store *sqlStore) execTx(ctx context.Context, fn func(*Queries) error) error{
 	//create a new db transaction
 	tx, err := store.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -63,7 +69,7 @@ type txKeyType string
 var txKey = txKeyType("txKey")
 
 
-func (store *Store) TransferTx(ctx context.Context, arg TransferTxParams) (TransferTxResult, error) {
+func (store *sqlStore) TransferTx(ctx context.Context, arg TransferTxParams) (TransferTxResult, error) {
     var result TransferTxResult
 
     // Start the transaction

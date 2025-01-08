@@ -9,8 +9,8 @@ sql:
     go: 
       package: "db"
       out: "./db/sqlc"
-      emit_empty_slices: false      # Generate empty slices instead of nil for collections
+      emit_empty_slices: true      # Generate empty slices instead of nil for collections
       emit_json_tags: true          # Include JSON tags in struct definitions
       emit_prepared_queries: false  # Generate code that uses prepared statements
-      emit_interface: false         # Emit an interface around the generated queries
+      emit_interface: true         # Emit an interface around the generated queries
       emit_exact_table_names: false
